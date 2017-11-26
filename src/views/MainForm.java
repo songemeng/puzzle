@@ -3,25 +3,34 @@ package views;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
-
+import java.applet.Applet;
+import java.applet.AudioClip;
 import java.awt.*;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.URL;
 import java.util.Random;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import Control.ControlPic;
+import Control.EightNum;
+import Control.MySQL;
+//import javafx.scene.media.Media;
+//import javafx.scene.media.MediaPlayer;
 
 public class MainForm extends JFrame implements ActionListener{
     private JPanel contentPanel;
     private JPanel imagePanel;
-    private JButton btnDoc = new JButton("About Game");
-    private JButton btnMusic = new JButton("BGM");
+    private JButton btnDoc = new JButton("Rank");
+    private JButton btnMusic = new JButton("Play Music");
     private JButton btnStart = new JButton("Play!");
     private JComboBox boxPic;
     private JComboBox boxGrade;
     private JLabel prePic;
+    private final JLabel aLabel = new JLabel("last time:");
+    private JLabel lblLeftTime = new JLabel("1200");
     //空白格的坐标
     private int blankRow = 2;
     private int blankCol = 2;
@@ -32,7 +41,10 @@ public class MainForm extends JFrame implements ActionListener{
     private boolean isRun = false;
 
     private String imgPathName;
+    private AudioClip sound = null;
 
+    private int leftTime;
+    private Timer timer;
 
 
     public static void main(String[] args) {
@@ -59,7 +71,7 @@ public class MainForm extends JFrame implements ActionListener{
     public MainForm()
     {
         //构造方法。
-        JFrame frame = new JFrame("views.MainForm");
+        JFrame frame = new JFrame("Puzzle by 松鹅");
         contentPanel = new JPanel();
         contentPanel.setBorder(new EmptyBorder(5,5,5,5));
         contentPanel.setLayout(null);
@@ -95,6 +107,23 @@ public class MainForm extends JFrame implements ActionListener{
         prePic.setBounds(520,10, 220, 220);
         contentPanel.add(prePic);
 
+        aLabel.setBounds(520,240,110,20);
+        contentPanel.add(aLabel);
+
+        lblLeftTime.setBounds(630,240,110,20);
+        contentPanel.add(lblLeftTime);
+
+        URL urlSound = this.getClass().getResource("/musics/test.wav"); //java一般不支持MP3文件
+        //下面这种形式已经不建议用了- -
+        sound = Applet.newAudioClip(urlSound);
+//        String musicFile = "music/test.wav";
+        //使用Javafx的
+//        String musicFile = this.getClass().getResource("/musics/test.wav").getFile();
+//
+//        Media sound = new Media(new File(musicFile).toURI().toString());
+//        MediaPlayer mediaPlayer = new MediaPlayer(sound);
+//        mediaPlayer.play();
+
         frame.setLayout(null);
         frame.setBounds(100, 100, 770, 560);
         frame.setContentPane(this.contentPanel);
@@ -110,11 +139,12 @@ public class MainForm extends JFrame implements ActionListener{
         //主界面几个按钮的响应
         if(e.getSource() == btnMusic)
         {
-            System.out.println("Music");
+            musicSwitch(e);
         }
         else if(e.getSource() == btnDoc)
         {
-            System.out.println("Doc");
+            //这个按钮改成排行榜吧...
+            new RankForm();
         }
         else if(e.getSource() == btnStart)
         {
@@ -122,13 +152,16 @@ public class MainForm extends JFrame implements ActionListener{
             {
                 //正在运行，戳这个就说明要重新开始了。
                 int n = JOptionPane.showConfirmDialog(this, "restart?");
-                if (n == 0)
+                if (n == 0) {
                     init();
+                    startThead();
+                }
             }
             else
             {
                 //这是第一次运行啦
                 init();
+                startThead();
                 isRun = true;
                 btnStart.setText("Play Again");
             }
@@ -167,6 +200,20 @@ public class MainForm extends JFrame implements ActionListener{
             if (isGameOver())
             {
                 JOptionPane.showMessageDialog(this,"You win!");
+                //接着要把数据插入数据库。
+                String name = JOptionPane.showInputDialog("What's your name?");
+                if (name == null|| "".equals(name.trim()))
+                    name = "No NAME";
+                //这里应该为了防止SQL注入进行一些人工的判断
+                //比如判断有没有特殊字符比如'之类的。
+                //不过想一想，构造起来也挺难的，那我也不判断了吧hhh
+                int time = 1200-leftTime;//测试数据
+                MySQL database = new MySQL();
+                if(!database.connectDataBase())
+                    JOptionPane.showMessageDialog(this,"connect failed!");
+                if(!database.insertNewItem(name, time))
+                    JOptionPane.showMessageDialog(this, "insert failed!");
+                database.closeDataBase();
             }
         }
     }
@@ -221,6 +268,16 @@ public class MainForm extends JFrame implements ActionListener{
         blankRow = gradeNum-1;
         blankCol = gradeNum-1;
         btnField[blankRow][blankCol].updateImage(false);
+
+        //这里搞一下判断测试一下hh
+//        EightNum test = new EightNum(gradeNum);
+//        if(test.isSolvable(numField))
+//        {
+//            JOptionPane.showMessageDialog(this,"it's solvable");
+//        }
+//        else
+//            JOptionPane.showMessageDialog(this,"it isn't solvable!Play again!");
+
     }
     
     public void getFormStatus()
@@ -283,23 +340,67 @@ public class MainForm extends JFrame implements ActionListener{
 
         //接下来要打乱。暂时用随机的算法，以后可以考虑用人工智能的办法。
         //这个随机算法是每一个和一个随机的位置进行交换。
-        for (int i = 0; i < gradeNum; i ++)
-        {
-            for (int j = 0; j < gradeNum; j++)
-            {
-                if (i == gradeNum-1 && j == gradeNum-1)
-                    break;//最后一个不随机。
-                //随机选中一个位置，和当前位置调换。
-                int x = rand.nextInt(gradeNum - 1);
-                int y = rand.nextInt(gradeNum - 1);
-                if(x == gradeNum-1 && y == gradeNum -1)
-                    continue;
-                int temp = numField[i][j];
-                numField[i][j] = numField[x][y];
-                numField[x][y] = temp;
+
+
+        //目前测试了一下，这个算法的成功率不是很高，那就采取，不成功就重新随机的办法来弄。
+        EightNum test = new EightNum(gradeNum);
+        do {
+            for (int i = 0; i < gradeNum; i++) {
+                for (int j = 0; j < gradeNum; j++) {
+                    if (i == gradeNum - 1 && j == gradeNum - 1)
+                        break;//最后一个不随机。
+                    //随机选中一个位置，和当前位置调换。
+                    int x = rand.nextInt(gradeNum - 1);
+                    int y = rand.nextInt(gradeNum - 1);
+                    if (x == gradeNum - 1 && y == gradeNum - 1)
+                        continue;
+                    int temp = numField[i][j];
+                    numField[i][j] = numField[x][y];
+                    numField[x][y] = temp;
+
+                }
+            }
+            //应该不会人品特别差 永远不出来吧hhh
+        }while (!test.isSolvable(numField));
+
+    }
+    public void musicSwitch(ActionEvent e) {
+        JButton btn = (JButton)e.getSource(); //事件源指向音乐按钮
+
+        if("Play Music".equals(btn.getText().trim())) {
+            sound.loop();
+            btn.setText("Close Music");
+        }else {
+            sound.stop();
+            btn.setText("Play Music");
+        }
+    }
+
+
+
+
+    public class MyTask extends TimerTask {
+
+        @Override
+        public void run() {
+            //-1s
+            leftTime--;
+            lblLeftTime.setText(leftTime+"");
+            if(leftTime == 0) {
+                lblLeftTime.setText(leftTime+"");
+                JOptionPane.showMessageDialog(null, "You have no time!");
+                this.cancel();
 
             }
         }
 
+    }
+    public void startThead() {
+        if(timer !=null)      //避免重新游戏后多个任务同时进行
+            timer.cancel();
+
+        leftTime = 1200;
+        timer = new Timer();
+        timer.schedule(new MyTask(), 1000,1000); //一秒后启动线程，每隔一秒响应线程
     }
 }

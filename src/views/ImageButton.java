@@ -31,7 +31,7 @@ public class ImageButton extends JButton
             String picName = pathName + "images/subImages/" + preName + num + ".jpg";
             ImageIcon icon = new ImageIcon(picName);
             icon.setImage(icon.getImage().getScaledInstance(size,size, Image.SCALE_DEFAULT));
-            this.setIcon(icon)
+            this.setIcon(icon);
         }
         else
             this.setIcon(null);
